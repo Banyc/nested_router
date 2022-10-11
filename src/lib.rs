@@ -144,6 +144,19 @@ mod tests {
     }
 
     #[test]
+    fn test_combined_segment() {
+        let root = route_list_4();
+
+        let absolute_path = "/1/2";
+        let relative_path = &absolute_path[1..];
+
+        let (sub_path, route, params) = root.route(relative_path).unwrap();
+        assert_eq!(route.path, "1/2");
+        assert_eq!(params.len(), 0);
+        assert_eq!(sub_path, None);
+    }
+
+    #[test]
     fn test_not_found() {
         let root = route_list_2();
 
@@ -218,6 +231,16 @@ mod tests {
         let root = RouteList {
             routes: vec![Route {
                 path: "".to_string(),
+                next_routes: None,
+            }],
+        };
+        root
+    }
+
+    fn route_list_4() -> RouteList {
+        let root = RouteList {
+            routes: vec![Route {
+                path: "1/2".to_string(),
                 next_routes: None,
             }],
         };
