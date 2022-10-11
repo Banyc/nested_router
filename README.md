@@ -46,14 +46,14 @@ Path segment matching for nested routers.
 
    let sub = route.next_routes.as_ref().unwrap();
 
-   let (sub_path, route, params) = sub.route(&sub_path).unwrap();
+   let (sub_path, route, params) = sub.route(&sub_path.unwrap()).unwrap();
    assert_eq!(route.path, ":id");
    assert_eq!(params.get("id"), Some(&"456".to_string()));
-   assert_eq!(sub_path, "");
+   assert_eq!(sub_path, None);
 
    // Your business logic here for the second route
    ```
 
 ## Restrictions
 
-- `Route::path` should not capture wildcard with name `"_sub_path"` (`crate::SUB_PATH_WILDCARD_NAME`)
+- `Route::path` should not capture wildcard with name `"_sub_path"` (`crate::SUB_PATH_WILDCARD_NAME`).
