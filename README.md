@@ -53,3 +53,7 @@ Path segment matching for nested routers.
 
    // Your business logic here for the second route
    ```
+
+## Restrictions
+
+- `Route::path` should not capture wildcard with name `"_sub_path"` (`crate::SUB_PATH_WILDCARD_NAME`)

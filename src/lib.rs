@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use route_recognizer::Router;
 
-const SUB_PATH_WILDCARD_NAME: &str = "_sub_path";
+pub const SUB_PATH_WILDCARD_NAME: &str = "_sub_path";
 
 #[derive(Debug)]
 pub struct Route {
@@ -31,12 +31,13 @@ impl RouteList {
     pub fn route(
         &self,
         rel_path: &str,
-    ) -> Result<(String, &Route, BTreeMap<String, String>), Error> {
+    ) -> Result<(Option<String>, &Route, BTreeMap<String, String>), Error> {
         if rel_path.starts_with('/') {
             return Err(Error::InvalidPath);
         }
         let router = {
             let mut router = Router::new();
+
             for (i, route) in self.routes.iter().enumerate() {
                 match route.next_routes {
                     Some(_) => {
@@ -54,20 +55,30 @@ impl RouteList {
                 let idx = **matched.handler();
                 let route = &self.routes[idx];
                 let mut params = BTreeMap::new();
-                let mut sub_path = "";
+                let mut sub_path = None;
+
                 for (key, value) in matched.params() {
                     if key == SUB_PATH_WILDCARD_NAME {
-                        sub_path = value;
+                        sub_path = Some(value);
                     } else {
                         params.insert(key.to_string(), value.to_string());
                     }
                 }
 
-                if sub_path != "" && route.next_routes.is_none() {
-                    return Err(Error::NotFound);
-                }
+                // client code should not occupy the wildcard name `SUB_PATH_WILDCARD_NAME`
+                assert_eq!(
+                    sub_path.is_some(),
+                    route.next_routes.is_some(),
+                    "Client code should not occupy the wildcard name `\"{}\"`",
+                    SUB_PATH_WILDCARD_NAME
+                );
 
-                Ok((sub_path.to_string(), route, params))
+                let sub_path = match sub_path {
+                    Some(sub_path) => Some(sub_path.to_string()),
+                    None => None,
+                };
+
+                Ok((sub_path, route, params))
             }
             Err(_) => Err(Error::NotFound),
         }
@@ -92,10 +103,10 @@ mod tests {
 
             let sub = route.next_routes.as_ref().unwrap();
 
-            let (sub_path, route, params) = sub.route(&sub_path).unwrap();
+            let (sub_path, route, params) = sub.route(&sub_path.unwrap()).unwrap();
             assert_eq!(route.path, ":id");
             assert_eq!(params.get("id"), Some(&"456".to_string()));
-            assert_eq!(sub_path, "");
+            assert_eq!(sub_path, None);
         }
 
         {
@@ -104,7 +115,7 @@ mod tests {
 
             let (sub_path, route, params) = root.route(relative_path).unwrap();
             assert_eq!(route.path, "about");
-            assert_eq!(sub_path, "");
+            assert_eq!(sub_path, None);
             assert_eq!(params.len(), 0);
         }
 
@@ -115,8 +126,21 @@ mod tests {
             let (sub_path, route, params) = root.route(relative_path).unwrap();
             assert_eq!(route.path, ":id");
             assert_eq!(params.get("id"), Some(&"about".to_string()));
-            assert_eq!(sub_path, "123");
+            assert_eq!(sub_path, Some("123".to_string()));
         }
+    }
+
+    #[test]
+    fn test_index() {
+        let root = route_list_3();
+
+        let absolute_path = "/";
+        let relative_path = &absolute_path[1..];
+
+        let (sub_path, route, params) = root.route(relative_path).unwrap();
+        assert_eq!(route.path, "");
+        assert_eq!(sub_path, None);
+        assert_eq!(params.len(), 0);
     }
 
     #[test]
@@ -147,6 +171,17 @@ mod tests {
         assert_eq!(root.route(absolute_path).unwrap_err(), Error::InvalidPath);
     }
 
+    #[test]
+    #[should_panic]
+    fn test_bad_client_code() {
+        let root = route_list_bad();
+
+        let absolute_path = "/123";
+        let relative_path = &absolute_path[1..];
+
+        let _ = root.route(relative_path);
+    }
+
     fn route_list_1() -> RouteList {
         let sub = RouteList {
             routes: vec![Route {
@@ -173,6 +208,26 @@ mod tests {
         let root = RouteList {
             routes: vec![Route {
                 path: "about".to_string(),
+                next_routes: None,
+            }],
+        };
+        root
+    }
+
+    fn route_list_3() -> RouteList {
+        let root = RouteList {
+            routes: vec![Route {
+                path: "".to_string(),
+                next_routes: None,
+            }],
+        };
+        root
+    }
+
+    fn route_list_bad() -> RouteList {
+        let root = RouteList {
+            routes: vec![Route {
+                path: format!(":{}", SUB_PATH_WILDCARD_NAME),
                 next_routes: None,
             }],
         };
