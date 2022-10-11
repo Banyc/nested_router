@@ -4,7 +4,7 @@ use route_recognizer::Router;
 
 pub const SUB_PATH_WILDCARD_NAME: &str = "_sub_path";
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct Route {
     pub path: String,
     pub next_routes: Option<RouteList>,
@@ -22,7 +22,7 @@ impl Clone for Route {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct RouteList {
     pub routes: Vec<Route>,
 }
