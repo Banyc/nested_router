@@ -38,7 +38,11 @@ Path segment matching for nested routers.
    let absolute_path = "/123/456";
    let relative_path = &absolute_path[1..];
 
-   let (sub_path, route, params) = root.route(relative_path).unwrap();
+   let RouteOutput {
+       sub_path,
+       route,
+       params,
+   } = root.route(relative_path).unwrap();
    assert_eq!(route.path, ":id");
    assert_eq!(params.get("id"), Some(&"123".to_string()));
 
@@ -46,7 +50,11 @@ Path segment matching for nested routers.
 
    let sub = route.next_routes.as_ref().unwrap();
 
-   let (sub_path, route, params) = sub.route(&sub_path.unwrap()).unwrap();
+   let RouteOutput {
+       sub_path,
+       route,
+       params,
+   } = sub.route(&sub_path.unwrap()).unwrap();
    assert_eq!(route.path, ":id");
    assert_eq!(params.get("id"), Some(&"456".to_string()));
    assert_eq!(sub_path, None);

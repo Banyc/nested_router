@@ -28,10 +28,7 @@ pub struct RouteList {
 }
 
 impl RouteList {
-    pub fn route(
-        &self,
-        rel_path: &str,
-    ) -> Result<(Option<String>, &Route, BTreeMap<String, String>), Error> {
+    pub fn route(&self, rel_path: &str) -> Result<RouteOutput, Error> {
         if rel_path.starts_with('/') {
             return Err(Error::InvalidPath);
         }
@@ -78,11 +75,22 @@ impl RouteList {
                     None => None,
                 };
 
-                Ok((sub_path, route, params))
+                Ok(RouteOutput {
+                    sub_path,
+                    route,
+                    params,
+                })
             }
             Err(_) => Err(Error::NotFound),
         }
     }
+}
+
+#[derive(Debug)]
+pub struct RouteOutput<'route_list> {
+    pub sub_path: Option<String>,
+    pub route: &'route_list Route,
+    pub params: BTreeMap<String, String>,
 }
 
 #[cfg(test)]
@@ -97,13 +105,21 @@ mod tests {
             let absolute_path = "/123/456";
             let relative_path = &absolute_path[1..];
 
-            let (sub_path, route, params) = root.route(relative_path).unwrap();
+            let RouteOutput {
+                sub_path,
+                route,
+                params,
+            } = root.route(relative_path).unwrap();
             assert_eq!(route.path, ":id");
             assert_eq!(params.get("id"), Some(&"123".to_string()));
 
             let sub = route.next_routes.as_ref().unwrap();
 
-            let (sub_path, route, params) = sub.route(&sub_path.unwrap()).unwrap();
+            let RouteOutput {
+                sub_path,
+                route,
+                params,
+            } = sub.route(&sub_path.unwrap()).unwrap();
             assert_eq!(route.path, ":id");
             assert_eq!(params.get("id"), Some(&"456".to_string()));
             assert_eq!(sub_path, None);
@@ -113,7 +129,11 @@ mod tests {
             let absolute_path = "/about";
             let relative_path = &absolute_path[1..];
 
-            let (sub_path, route, params) = root.route(relative_path).unwrap();
+            let RouteOutput {
+                sub_path,
+                route,
+                params,
+            } = root.route(relative_path).unwrap();
             assert_eq!(route.path, "about");
             assert_eq!(sub_path, None);
             assert_eq!(params.len(), 0);
@@ -123,7 +143,11 @@ mod tests {
             let absolute_path = "/about/123";
             let relative_path = &absolute_path[1..];
 
-            let (sub_path, route, params) = root.route(relative_path).unwrap();
+            let RouteOutput {
+                sub_path,
+                route,
+                params,
+            } = root.route(relative_path).unwrap();
             assert_eq!(route.path, ":id");
             assert_eq!(params.get("id"), Some(&"about".to_string()));
             assert_eq!(sub_path, Some("123".to_string()));
@@ -137,7 +161,11 @@ mod tests {
         let absolute_path = "/";
         let relative_path = &absolute_path[1..];
 
-        let (sub_path, route, params) = root.route(relative_path).unwrap();
+        let RouteOutput {
+            sub_path,
+            route,
+            params,
+        } = root.route(relative_path).unwrap();
         assert_eq!(route.path, "");
         assert_eq!(sub_path, None);
         assert_eq!(params.len(), 0);
@@ -150,7 +178,11 @@ mod tests {
         let absolute_path = "/1/2";
         let relative_path = &absolute_path[1..];
 
-        let (sub_path, route, params) = root.route(relative_path).unwrap();
+        let RouteOutput {
+            sub_path,
+            route,
+            params,
+        } = root.route(relative_path).unwrap();
         assert_eq!(route.path, "1/2");
         assert_eq!(params.len(), 0);
         assert_eq!(sub_path, None);
