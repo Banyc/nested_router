@@ -28,9 +28,12 @@ pub struct RouteList {
 }
 
 impl RouteList {
-    pub fn route(&self, rel_path: &str) -> Result<RouteOutput, Error> {
+    pub fn route(&self, mut rel_path: &str) -> Result<RouteOutput, Error> {
         if rel_path.starts_with('/') {
             return Err(Error::InvalidPath);
+        }
+        if rel_path.ends_with('/') {
+            rel_path = &rel_path[..rel_path.len() - 1];
         }
         let router = {
             let mut router = Router::new();
@@ -52,31 +55,18 @@ impl RouteList {
                 let idx = **matched.handler();
                 let route = &self.routes[idx];
                 let mut params = BTreeMap::new();
-                let mut sub_path = None;
+                let mut sub_path = "";
 
                 for (key, value) in matched.params() {
                     if key == SUB_PATH_WILDCARD_NAME {
-                        sub_path = Some(value);
+                        sub_path = value;
                     } else {
                         params.insert(key.to_string(), value.to_string());
                     }
                 }
 
-                // client code should not occupy the wildcard name `SUB_PATH_WILDCARD_NAME`
-                assert_eq!(
-                    sub_path.is_some(),
-                    route.next_routes.is_some(),
-                    "Client code should not occupy the wildcard name `\"{}\"`",
-                    SUB_PATH_WILDCARD_NAME
-                );
-
-                let sub_path = match sub_path {
-                    Some(sub_path) => Some(sub_path.to_string()),
-                    None => None,
-                };
-
                 Ok(RouteOutput {
-                    sub_path,
+                    sub_path: sub_path.to_string(),
                     route,
                     params,
                 })
@@ -88,7 +78,7 @@ impl RouteList {
 
 #[derive(Debug)]
 pub struct RouteOutput<'route_list> {
-    pub sub_path: Option<String>,
+    pub sub_path: String,
     pub route: &'route_list Route,
     pub params: BTreeMap<String, String>,
 }
@@ -119,10 +109,10 @@ mod tests {
                 sub_path,
                 route,
                 params,
-            } = sub.route(&sub_path.unwrap()).unwrap();
+            } = sub.route(&sub_path).unwrap();
             assert_eq!(route.path, ":id");
             assert_eq!(params.get("id"), Some(&"456".to_string()));
-            assert_eq!(sub_path, None);
+            assert_eq!(sub_path, "");
         }
 
         {
@@ -135,7 +125,7 @@ mod tests {
                 params,
             } = root.route(relative_path).unwrap();
             assert_eq!(route.path, "about");
-            assert_eq!(sub_path, None);
+            assert_eq!(sub_path, "");
             assert_eq!(params.len(), 0);
         }
 
@@ -150,7 +140,7 @@ mod tests {
             } = root.route(relative_path).unwrap();
             assert_eq!(route.path, ":id");
             assert_eq!(params.get("id"), Some(&"about".to_string()));
-            assert_eq!(sub_path, Some("123".to_string()));
+            assert_eq!(sub_path, "123".to_string());
         }
     }
 
@@ -167,13 +157,18 @@ mod tests {
             params,
         } = root.route(relative_path).unwrap();
         assert_eq!(route.path, "");
-        assert_eq!(sub_path, None);
+        assert_eq!(sub_path, "");
         assert_eq!(params.len(), 0);
     }
 
     #[test]
     fn test_combined_segment() {
-        let root = route_list_4();
+        let root = RouteList {
+            routes: vec![Route {
+                path: "1/2".to_string(),
+                next_routes: None,
+            }],
+        };
 
         let absolute_path = "/1/2";
         let relative_path = &absolute_path[1..];
@@ -185,7 +180,7 @@ mod tests {
         } = root.route(relative_path).unwrap();
         assert_eq!(route.path, "1/2");
         assert_eq!(params.len(), 0);
-        assert_eq!(sub_path, None);
+        assert_eq!(sub_path, "");
     }
 
     #[test]
@@ -217,14 +212,53 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
-    fn test_bad_client_code() {
-        let root = route_list_bad();
+    fn test_sub_index() {
+        let sub = RouteList {
+            routes: vec![Route {
+                path: "".to_string(),
+                next_routes: None,
+            }],
+        };
+        let root = RouteList {
+            routes: vec![
+                Route {
+                    path: "sub".to_string(),
+                    next_routes: Some(sub),
+                },
+                Route {
+                    path: "*".to_string(),
+                    next_routes: None,
+                },
+            ],
+        };
 
-        let absolute_path = "/123";
-        let relative_path = &absolute_path[1..];
+        {
+            let absolute_path = "/sub";
+            let relative_path = &absolute_path[1..];
 
-        let _ = root.route(relative_path);
+            let RouteOutput {
+                sub_path,
+                route,
+                params,
+            } = root.route(relative_path).unwrap();
+            assert_eq!(sub_path, "");
+            assert_eq!(route.path, "sub");
+            assert_eq!(params.len(), 0);
+        }
+
+        {
+            let absolute_path = "/sub/";
+            let relative_path = &absolute_path[1..];
+
+            let RouteOutput {
+                sub_path,
+                route,
+                params,
+            } = root.route(relative_path).unwrap();
+            assert_eq!(sub_path, "");
+            assert_eq!(route.path, "sub");
+            assert_eq!(params.len(), 0);
+        }
     }
 
     fn route_list_1() -> RouteList {
@@ -263,26 +297,6 @@ mod tests {
         let root = RouteList {
             routes: vec![Route {
                 path: "".to_string(),
-                next_routes: None,
-            }],
-        };
-        root
-    }
-
-    fn route_list_4() -> RouteList {
-        let root = RouteList {
-            routes: vec![Route {
-                path: "1/2".to_string(),
-                next_routes: None,
-            }],
-        };
-        root
-    }
-
-    fn route_list_bad() -> RouteList {
-        let root = RouteList {
-            routes: vec![Route {
-                path: format!(":{}", SUB_PATH_WILDCARD_NAME),
                 next_routes: None,
             }],
         };
