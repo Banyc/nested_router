@@ -7,33 +7,33 @@ Path segment matching for nested routers.
 1. Define your routes:
 
    ```rust
-   fn route_list_1() -> RouteList {
+   fn route_list_1() -> (RouteList, RouteList) {
        let sub = RouteList {
            routes: vec![Route {
                path: ":id".to_string(),
-               next_routes: None,
+               has_sub_routes: false,
            }],
        };
        let root = RouteList {
            routes: vec![
                Route {
                    path: ":id".to_string(),
-                   next_routes: Some(sub.clone()),
+                   has_sub_routes: true,
                },
                Route {
                    path: "about".to_string(),
-                   next_routes: None,
+                   has_sub_routes: false,
                },
            ],
        };
-       root
+       (root, sub)
    }
    ```
 
 1. Use the two routers:
 
    ```rust
-   let root = route_list_1();
+   let (root, sub) = route_list_1();
 
    let absolute_path = "/123/456";
    let relative_path = &absolute_path[1..];
@@ -47,8 +47,6 @@ Path segment matching for nested routers.
    assert_eq!(params.get("id"), Some(&"123".to_string()));
 
    // Your business logic here for the first route
-
-   let sub = route.next_routes.as_ref().unwrap();
 
    let RouteOutput {
        sub_path,
