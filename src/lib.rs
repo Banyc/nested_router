@@ -4,22 +4,10 @@ use route_recognizer::Router;
 
 pub const SUB_PATH_WILDCARD_NAME: &str = "_sub_path";
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Route {
     pub path: String,
-    pub next_routes: Option<RouteList>,
-}
-
-impl Clone for Route {
-    fn clone(&self) -> Self {
-        Self {
-            path: self.path.clone(),
-            next_routes: match self.next_routes {
-                Some(ref next_routes) => Some(next_routes.clone()),
-                None => None,
-            },
-        }
-    }
+    pub has_sub_routes: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -39,11 +27,9 @@ impl RouteList {
             let mut router = Router::new();
 
             for (i, route) in self.routes.iter().enumerate() {
-                match route.next_routes {
-                    Some(_) => {
-                        router.add(&format!("{}/*{}", &route.path, SUB_PATH_WILDCARD_NAME), i)
-                    }
-                    None => router.add(&route.path, i),
+                match route.has_sub_routes {
+                    true => router.add(&format!("{}/*{}", &route.path, SUB_PATH_WILDCARD_NAME), i),
+                    false => router.add(&route.path, i),
                 }
                 router.add(&route.path, i);
             }
@@ -89,7 +75,7 @@ mod tests {
 
     #[test]
     fn test_ok() {
-        let root = route_list_1();
+        let (root, sub) = route_list_1();
 
         {
             let absolute_path = "/123/456";
@@ -102,8 +88,6 @@ mod tests {
             } = root.route(relative_path).unwrap();
             assert_eq!(route.path, ":id");
             assert_eq!(params.get("id"), Some(&"123".to_string()));
-
-            let sub = route.next_routes.as_ref().unwrap();
 
             let RouteOutput {
                 sub_path,
@@ -166,7 +150,7 @@ mod tests {
         let root = RouteList {
             routes: vec![Route {
                 path: "1/2".to_string(),
-                next_routes: None,
+                has_sub_routes: false,
             }],
         };
 
@@ -213,21 +197,15 @@ mod tests {
 
     #[test]
     fn test_sub_index() {
-        let sub = RouteList {
-            routes: vec![Route {
-                path: "".to_string(),
-                next_routes: None,
-            }],
-        };
         let root = RouteList {
             routes: vec![
                 Route {
                     path: "sub".to_string(),
-                    next_routes: Some(sub),
+                    has_sub_routes: true,
                 },
                 Route {
                     path: "*".to_string(),
-                    next_routes: None,
+                    has_sub_routes: false,
                 },
             ],
         };
@@ -261,33 +239,33 @@ mod tests {
         }
     }
 
-    fn route_list_1() -> RouteList {
+    fn route_list_1() -> (RouteList, RouteList) {
         let sub = RouteList {
             routes: vec![Route {
                 path: ":id".to_string(),
-                next_routes: None,
+                has_sub_routes: false,
             }],
         };
         let root = RouteList {
             routes: vec![
                 Route {
                     path: ":id".to_string(),
-                    next_routes: Some(sub.clone()),
+                    has_sub_routes: true,
                 },
                 Route {
                     path: "about".to_string(),
-                    next_routes: None,
+                    has_sub_routes: false,
                 },
             ],
         };
-        root
+        (root, sub)
     }
 
     fn route_list_2() -> RouteList {
         let root = RouteList {
             routes: vec![Route {
                 path: "about".to_string(),
-                next_routes: None,
+                has_sub_routes: false,
             }],
         };
         root
@@ -297,7 +275,7 @@ mod tests {
         let root = RouteList {
             routes: vec![Route {
                 path: "".to_string(),
-                next_routes: None,
+                has_sub_routes: false,
             }],
         };
         root
